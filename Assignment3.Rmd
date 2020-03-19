@@ -31,14 +31,14 @@ The research questions you have to answer are the following:
 
 ## First part
 
-Q1.1) Does schizophrenia involved altercentric intrusion? Define model and priors. Test the implications of your priors (prior predictive checks) and if needed adjust them. Run the model. Test the quality of the fitted model (posterior predictive checks). Assess the evidence in favor of an increased altercentric intrusion in schizophrenia. Report the model and the results, including plots.
+Q1.1) Does schizophrenia involve altercentric intrusion? Define model and priors. Test the implications of your priors (prior predictive checks) and if needed adjust them. Run the model. Test the quality of the fitted model (posterior predictive checks). Assess the evidence in favor of an increased altercentric intrusion in schizophrenia. Report the model and the results, including plots.
 
 ```{r}
 pacman::p_load(tidyverse, brms)
 
 # Prepare the data
 
-d <- Ass3
+d <- read.csv("Ass3.csv")
 #summary(d)
 
 d$Diagnosis <- plyr::revalue(as.character(d$Diagnosis), 
@@ -61,9 +61,11 @@ AltercentricDiagnosis_f <- bf(
 )
 
 # Design the priors
-
+#Gaussian because data is continuoes
 get_prior(AltercentricDiagnosis_f0, family = gaussian, d)
 get_prior(AltercentricDiagnosis_f, family = gaussian, d)
+
+summary(d$AltercentricIntrusion) # get info for beta
 
 priorDiagnosis <- c(
   prior(normal(4, 1), class = b),
@@ -122,6 +124,57 @@ Q1.2) Is altercentric intrusion related to specific symptoms *in the patients*? 
 ## Second part
 
 Q2.1) However, we know that the diagnosis is based on symptom assessment: if the overall sum of symptoms is severe enough, the participant gets a diagnosis. In other words, by selecting the patients, and including the symptoms in the model we might have inadvertently introduced an issue in our inference. Do try to draw a causal graph (Directed Acyclical Graph) of the variables and compare it with the types of causal graphs presented in the slides. Discuss which biases you might have introduced.
+```{r}
+d_sz <- d[d$Diagnosis == "Schizophrenia",]
+
+AltercentricVoice <- bf(
+  AltercentricIntrusion ~ 1 + VoiceHearing
+)
+get_prior(AltercentricVoice,family = gaussian, d_sz)
+AltercentricMind <- bf(
+  AltercentricIntrusion ~ 1 + MindReading
+)
+
+AltercentricApathy <- bf(
+  AltercentricIntrusion ~ 1 + Apathy
+)
+
+summary(d_sz$AltercentricIntrusion) # get info for beta
+
+priorVoice <- c(
+  prior(normal(2,1), class = Intercept),
+  prior(normal(4, 1), class = b),
+  prior(normal(0,1), class = sigma)
+) 
+
+# Test the priors
+
+AltercentricVoice_PriorCheck_m <- brm(
+  formula = AltercentricVoice,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+pp_check(AltercentricVoice_PriorCheck_m, nsamples = 100)
+
+## Fitting the model
+AltercentricVoice_m <- brm(
+  formula = AltercentricVoice,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+# Posterior predictive check
+pp_check(AltercentricVoice_m, nsamples = 100)
+
+plot(hypothesis(AltercentricVoice_m,
+           "VoiceHearing < 0"))
+
+```
 
 Q2.2.) Redesign your analysis following the graph and report how the results change
 
