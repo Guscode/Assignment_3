@@ -34,7 +34,9 @@ The research questions you have to answer are the following:
 Q1.1) Does schizophrenia involve altercentric intrusion? Define model and priors. Test the implications of your priors (prior predictive checks) and if needed adjust them. Run the model. Test the quality of the fitted model (posterior predictive checks). Assess the evidence in favor of an increased altercentric intrusion in schizophrenia. Report the model and the results, including plots.
 
 ```{r}
-pacman::p_load(tidyverse, brms)
+library(pacman)
+p_load(bayesplot, rstanarm,tidyverse, brms, ggplot2)
+
 
 # Prepare the data
 
@@ -120,35 +122,36 @@ The model had no divergences, a Rhat of 1, and Effective Sample Sizes above 2000
 [Add prior and posterior checks plots; add updating check plot]
 
 Q1.2) Is altercentric intrusion related to specific symptoms *in the patients*? Identify which of the symptoms could be relevant. Should you include more than one symptom? Build models, priors, predictive checks. Assess the evidence and report models and results, including plots. Discuss whether the results make sense.
-
-## Second part
-
-Q2.1) However, we know that the diagnosis is based on symptom assessment: if the overall sum of symptoms is severe enough, the participant gets a diagnosis. In other words, by selecting the patients, and including the symptoms in the model we might have inadvertently introduced an issue in our inference. Do try to draw a causal graph (Directed Acyclical Graph) of the variables and compare it with the types of causal graphs presented in the slides. Discuss which biases you might have introduced.
 ```{r}
+standardize <- function(column){
+  standard <- (column-mean(column))/
+    sd(column)
+  return(standard)
+}
+
+d$VoiceHearing_s <- standardize(d$VoiceHearing)
+d$MindReading_s <- standardize(d$MindReading)
+d$Apathy_s <- standardize(d$Apathy)
+d$AltercentricIntrusion_s <- standardize(d$AltercentricIntrusion)
+
 d_sz <- d[d$Diagnosis == "Schizophrenia",]
 
+#VoiceModel
 AltercentricVoice <- bf(
-  AltercentricIntrusion ~ 1 + VoiceHearing
-)
-get_prior(AltercentricVoice,family = gaussian, d_sz)
-AltercentricMind <- bf(
-  AltercentricIntrusion ~ 1 + MindReading
+  AltercentricIntrusion_s ~ 1 + VoiceHearing_s
 )
 
-AltercentricApathy <- bf(
-  AltercentricIntrusion ~ 1 + Apathy
-)
 
-summary(d_sz$AltercentricIntrusion) # get info for beta
-
+#We expect intercept to be 0 because we scaled the parameters
+#We expect the beta to fall mostly between 1 and -1
 priorVoice <- c(
-  prior(normal(2,1), class = Intercept),
-  prior(normal(4, 1), class = b),
-  prior(normal(0,1), class = sigma)
+  prior(normal(0,1), class = Intercept),
+  prior(normal(0, .3), class = b),
+  prior(normal(1,2), class = sigma)
 ) 
 
-# Test the priors
 
+# Test the priors
 AltercentricVoice_PriorCheck_m <- brm(
   formula = AltercentricVoice,
   data = d_sz,
@@ -157,6 +160,7 @@ AltercentricVoice_PriorCheck_m <- brm(
   sample_prior = "only"
 )
 
+#Prior predictive check
 pp_check(AltercentricVoice_PriorCheck_m, nsamples = 100)
 
 ## Fitting the model
@@ -171,14 +175,365 @@ AltercentricVoice_m <- brm(
 # Posterior predictive check
 pp_check(AltercentricVoice_m, nsamples = 100)
 
+
+#model check
+AltercentricVoice_m
+
 plot(hypothesis(AltercentricVoice_m,
-           "VoiceHearing < 0"))
+           "VoiceHearing_s < 0"))
+
+
+hypothesis(AltercentricVoice_m,
+           "VoiceHearing_s > 0")
+
+#plot effect
+plot(conditional_effects(AltercentricVoice_m), points = T)
+```
+
+```{r}
+###MindModel
+AltercentricMind <- bf(
+  AltercentricIntrusion_s ~ 1 + MindReading_s
+)
+
+AltercentricMind_PriorCheck_m <- brm(
+  formula = AltercentricMind,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+#Prior predictive check
+pp_check(AltercentricMind_PriorCheck_m, nsamples = 100)
+
+AltercentricMind_m <- brm(
+  formula = AltercentricMind,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+#posterior predictive check
+pp_check(AltercentricMind_m, nsamples = 100)
+
+#checking model
+AltercentricMind_m
+
+#testing hypothesis
+hypothesis(AltercentricMind_m,
+           "MindReading_s >0")
+
+plot(conditional_effects(AltercentricMind_m), points = T)
+```
+
+
+```{r}
+#ApathyModel
+AltercentricApathy <- bf(
+  AltercentricIntrusion_s ~ 1 + Apathy_s
+)
+
+AltercentricApathy_PriorCheck_m <- brm(
+  formula = AltercentricApathy,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+#Prior predictive check
+pp_check(AltercentricApathy_PriorCheck_m, nsamples = 100)
+
+AltercentricApathy_m <- brm(
+  formula = AltercentricApathy,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+#posterior predictive check
+pp_check(AltercentricApathy_m, nsamples = 100)
+
+#checking model
+AltercentricApathy_m
+
+#testing hypothesis
+hypothesis(AltercentricApathy_m,
+           "Apathy_s <0")
+
+plots<- plot(conditional_effects(multi_m), points = T)
+plots
+```
+
+```{r}
+mul_model <- bf(
+  AltercentricIntrusion_s ~ 1 + VoiceHearing_s+MindReading_s
+)
+
+mul_m <- brm(
+  formula = mul_model,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+mul_m
+hypothesis(mul_m, 
+           "VoiceHearing_s>0")
+hypothesis(mul_m, 
+           "MindReading_s>0")
+
+multi_model <- bf(
+  AltercentricIntrusion_s ~ 1 + VoiceHearing_s+MindReading_s+Apathy_s
+)
+
+multi_m <- brm(
+  formula = multi_model,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+multi_m
+hypothesis(multi_m, 
+           "VoiceHearing_s >0")
+hypothesis(multi_m, 
+           "MindReading_s >0")
+hypothesis(multi_m, 
+           "Apathy_s <0")
+
+
+mcmc_areas(
+  multi_m, 
+  pars = c("b_VoiceHearing_s", "b_MindReading_s", "b_Apathy_s"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+)
+
+d_sz %>% 
+  select(AltercentricIntrusion_s, VoiceHearing_s, MindReading_s, Apathy_s) %>% 
+  pairs(col = "firebrick4")
+
+
+###Information criterion testing
+AltercentricApathy_m <- add_criterion(AltercentricApathy_m, criterion = "loo")
+AltercentricMind_m<- add_criterion(AltercentricMind_m, criterion = "loo")
+AltercentricVoice_m<- add_criterion(AltercentricVoice_m, criterion = "loo")
+mul_m<- add_criterion(mul_m, criterion = "loo")
+multi_m<- add_criterion(multi_m, criterion = "loo")
+
+loo_compare(AltercentricApathy_m,
+            AltercentricMind_m,
+            AltercentricVoice_m,
+            mul_m,
+            multi_m)
+
+loo_model_weights(
+            AltercentricMind_m,
+            AltercentricVoice_m,
+            AltercentricApathy_m,
+            mul_m,
+            multi_m)
 
 ```
 
+## Second part
+
+Q2.1) However, we know that the diagnosis is based on symptom assessment: if the overall sum of symptoms is severe enough, the participant gets a diagnosis. In other words, by selecting the patients, and including the symptoms in the model we might have inadvertently introduced an issue in our inference. Do try to draw a causal graph (Directed Acyclical Graph) of the variables and compare it with the types of causal graphs presented in the slides. Discuss which biases you might have introduced.
+
 Q2.2.) Redesign your analysis following the graph and report how the results change
 
+```{r}
+#VoiceModel
+AltercentricVoice <- bf(
+  AltercentricIntrusion_s ~ 1 + VoiceHearing_s
+)
 
+
+#We expect intercept to be 0 because we scaled the parameters
+#We expect the beta to fall mostly between 1 and -1
+priorVoice <- c(
+  prior(normal(0,1), class = Intercept),
+  prior(normal(0, .3), class = b),
+  prior(normal(1,2), class = sigma)
+) 
+
+
+# Test the priors
+AltercentricVoice_PriorCheck_m <- brm(
+  formula = AltercentricVoice,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+#Prior predictive check
+pp_check(AltercentricVoice_PriorCheck_m, nsamples = 100)
+
+## Fitting the model
+AltercentricVoice_m <- brm(
+  formula = AltercentricVoice,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+# Posterior predictive check
+pp_check(AltercentricVoice_m, nsamples = 100)
+
+
+#model check
+AltercentricVoice_m
+
+plot(hypothesis(AltercentricVoice_m,
+           "VoiceHearing_s > 0"))
+
+
+hypothesis(AltercentricVoice_m,
+           "VoiceHearing_s > 0")
+
+#plot effect
+plot(conditional_effects(AltercentricVoice_m), points = T)
+```
+
+```{r}
+###MindModel
+AltercentricMind <- bf(
+  AltercentricIntrusion_s ~ 1 + MindReading_s
+)
+
+AltercentricMind_PriorCheck_m <- brm(
+  formula = AltercentricMind,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+#Prior predictive check
+pp_check(AltercentricMind_PriorCheck_m, nsamples = 100)
+
+AltercentricMind_m <- brm(
+  formula = AltercentricMind,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+#posterior predictive check
+pp_check(AltercentricMind_m, nsamples = 100)
+
+#checking model
+AltercentricMind_m
+
+#testing hypothesis
+plot(hypothesis(AltercentricMind_m,
+           "MindReading_s >0"))
+
+plot(conditional_effects(AltercentricMind_m), points = T)
+```
+
+
+```{r}
+#ApathyModel
+AltercentricApathy <- bf(
+  AltercentricIntrusion_s ~ 1 + Apathy_s
+)
+
+AltercentricApathy_PriorCheck_m <- brm(
+  formula = AltercentricApathy,
+  data = d_sz,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = "only"
+)
+
+#Prior predictive check
+pp_check(AltercentricApathy_PriorCheck_m, nsamples = 100)
+
+AltercentricApathy_m <- brm(
+  formula = AltercentricApathy,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+#posterior predictive check
+pp_check(AltercentricApathy_m, nsamples = 100)
+
+#checking model
+AltercentricApathy_m
+
+#testing hypothesis
+plot(hypothesis(AltercentricApathy_m,
+           "Apathy_s <0"))
+
+plots<- plot(conditional_effects(multi_m), points = T)
+plots
+```
+
+```{r}
+multi_model <- bf(
+  AltercentricIntrusion_s ~ 1 + VoiceHearing_s+MindReading_s+Apathy_s
+)
+
+multi_m <- brm(
+  formula = multi_model,
+  data = d,
+  family = gaussian,
+  prior = priorVoice,
+  sample_prior = T
+)
+
+multi_m
+hypothesis(multi_m, 
+           "VoiceHearing_s >0")
+hypothesis(multi_m, 
+           "MindReading_s >0")
+hypothesis(multi_m, 
+           "Apathy_s <0")
+
+
+plotty<- mcmc_areas(
+  multi_m, 
+  pars = c("b_VoiceHearing_s", "b_MindReading_s", "b_Apathy_s"),
+  prob = 0.8, # 80% intervals
+  prob_outer = 0.99, # 99%
+  point_est = "mean"
+)
+
+d_sz %>% 
+  select(AltercentricIntrusion_s, VoiceHearing_s, MindReading_s, Apathy_s) %>% 
+  pairs(col = "firebrick4")
+
+AltercentricApathy_m <- add_criterion(AltercentricApathy_m, criterion = "loo")
+AltercentricMind_m<- add_criterion(AltercentricMind_m, criterion = "loo")
+AltercentricVoice_m<- add_criterion(AltercentricVoice_m, criterion = "loo")
+mul_m<- add_criterion(mul_m, criterion = "loo")
+multi_m<- add_criterion(multi_m, criterion = "loo")
+
+loo_compare(AltercentricApathy_m,
+            AltercentricMind_m,
+            AltercentricVoice_m,
+            multi_m)
+
+loo_model_weights(
+            AltercentricMind_m,
+            AltercentricVoice_m,
+            AltercentricApathy_m,
+            multi_m)
+
+```
 ## Third part
 
 These issues are very difficult to think through, and not knowing the causal mechanisms generating the data in advance makes our inferences even more unreliable. To explore these issues, I recommend using simulations. In other words, defining a "true" model, generating data from it and assessing what different analyses would lead you to infer (and therefore which biases they might introduce). You can find the code I used to simulate your data below.
