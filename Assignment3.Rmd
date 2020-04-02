@@ -540,6 +540,15 @@ These issues are very difficult to think through, and not knowing the causal mec
 
 Q3.1) Look through the code and identify whether the results you have match the underlying truth. Discuss what you have learned.
 
+```{r}
+#relationship between variables
+pairs.panels(dplyr::select(skizo, -Diagnosis, -ID))
+
+#relationship between variables with only skizo
+pairs.panels(dplyr::select(skizos_only, -Diagnosis, -ID))
+```
+
+
 Q3.2) OPTIONAL: is this a general pattern? Try varying the parameters (e.g. correlation values) and assess whether the new dataset(s) leads to the same biases in your analysis.
 
 
